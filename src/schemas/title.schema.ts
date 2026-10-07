@@ -2,6 +2,7 @@ import { z } from "zod";
 import { objectId } from "./common.schema.js";
 
 export const titleTypeEnum = z.enum(["movie", "tv", "anime"]);
+export const titleSortEnum = z.enum(["popular", "rating", "recent"]);
 
 export const createTitleBody = z.object({
   title: z.string().trim().min(1).max(200),
@@ -22,7 +23,9 @@ export const listTitlesQuery = z.object({
   categoryId: objectId.optional(),
   // alias heredado del frontend
   categoriesId: objectId.optional(),
-  search: z.string().trim().optional(),
+  search: z.string().trim().max(100).optional(),
+  /** Sin valor se conserva el orden natural (el que usa el Home). */
+  sort: titleSortEnum.optional(),
 });
 
 export const collectionQuery = z.object({

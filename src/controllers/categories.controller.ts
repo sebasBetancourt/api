@@ -1,8 +1,9 @@
 import type { FastifyReply, FastifyRequest, RouteGenericInterface } from "fastify";
 import {
   createCategoryService, deleteCategoryService, renameCategoryService, getCategoryByIdService,
-  getCategoryByNameService, listCategoriesService,
+  getCategoryByNameService, getCategorySummaryService, listCategoriesService,
 } from "../services/categories/categoryServices.js";
+import type { SummaryQuery } from "../schemas/category.schema.js";
 
 type Req<T extends RouteGenericInterface = RouteGenericInterface> = FastifyRequest<T>;
 
@@ -13,6 +14,7 @@ export const categoriesController = {
   },
   list: (req: Req<{ Querystring: { skip: number; limit: number } }>) =>
     listCategoriesService(req.query.skip, req.query.limit),
+  summary: (req: Req<{ Querystring: SummaryQuery }>) => getCategorySummaryService(req.query.type),
   getById: (req: Req<{ Params: { id: string } }>) => getCategoryByIdService(req.params.id),
   getByName: (req: Req<{ Params: { name: string } }>) => getCategoryByNameService(req.params.name),
   rename: (req: Req<{ Params: { id: string }; Body: { name: string } }>) =>

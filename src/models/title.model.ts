@@ -18,6 +18,13 @@ export interface TitleDoc {
   tmdb_id?: number;
   imdb_id?: string;
   embed_url?: string;
+  backdropUrl?: string;
+  /** Calidad que informa Vimeus ("FULL HD", "HD"...). */
+  quality?: string;
+  /** "vimeus" si el título lo creó la sincronización. */
+  source?: string;
+  /** Última corrida de la sincronización con Vimeus que lo vio en el listado. */
+  vimeusSyncedAt?: Date;
   ratingAvg: number;
   ratingCount: number;
   likes: number;
@@ -42,6 +49,10 @@ const schema = new Schema<TitleDoc>(
     tmdb_id: Number,
     imdb_id: String,
     embed_url: String,
+    backdropUrl: String,
+    quality: String,
+    source: String,
+    vimeusSyncedAt: Date,
     ratingAvg: { type: Number, default: 0 },
     ratingCount: { type: Number, default: 0 },
     likes: { type: Number, default: 0 },

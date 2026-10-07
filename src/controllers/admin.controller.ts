@@ -1,8 +1,9 @@
-import type { FastifyRequest, RouteGenericInterface } from "fastify";
+import type { FastifyReply, FastifyRequest, RouteGenericInterface } from "fastify";
 import {
   deleteUserService, getMetricsService, listAllTitlesService, listUsersService,
   setUserBannedService, setUserRoleService,
 } from "../services/admin/adminServices.js";
+import { getVimeusSyncStatusService, startVimeusSyncService } from "../services/vimeus/vimeusAdminServices.js";
 
 type Req<T extends RouteGenericInterface = RouteGenericInterface> = FastifyRequest<T>;
 type Id = { Params: { id: string } };
@@ -21,4 +22,9 @@ export const adminController = {
     await deleteUserService(req.user.id, req.params.id);
     return { message: "Usuario eliminado" };
   },
+  async startVimeusSync(req: Req, reply: FastifyReply) {
+    const r = await startVimeusSyncService(req.user.id, req.log);
+    return reply.code(202).send(r);
+  },
+  vimeusSyncStatus: () => getVimeusSyncStatusService(),
 };

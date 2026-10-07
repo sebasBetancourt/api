@@ -75,7 +75,10 @@ const specs: CollectionSpec[] = [
     indexes: [
       { key: { title: "text", description: "text" }, options: { name: "TextIndex" } },
       { key: { type: 1, status: 1, createdAt: -1 } },
-      { key: { tmdb_id: 1 }, options: { unique: true, sparse: true } },
+      { key: { categoriesIds: 1, status: 1, type: 1 } }, // explorar por categoría y /categories/summary
+      // Películas y series repiten ids de TMDB: la unicidad es por (tmdb_id, type). Sustituye al índice
+      // único sobre tmdb_id solo; en BD existentes se migra con `pnpm db:tmdb-index`.
+      { key: { tmdb_id: 1, type: 1 }, options: { unique: true, partialFilterExpression: { tmdb_id: { $exists: true } } } },
       { key: { imdb_id: 1 }, options: { unique: true, sparse: true } },
     ],
   },
@@ -153,6 +156,35 @@ const specs: CollectionSpec[] = [
       { key: { hash: 1 } },
       { key: { expiresAt: 1 }, options: { expireAfterSeconds: 0 } },
     ],
+  },
+  {
+    name: "sync_runs",
+    schema: {
+      bsonType: "object",
+      required: ["kind", "trigger", "dryRun", "status", "startedAt"],
+      properties: {
+        kind: { bsonType: "string" },
+        trigger: { enum: ["cli", "admin", "cron"] },
+        dryRun: { bsonType: "bool" },
+        status: { enum: ["running", "success", "partial", "failed"] },
+        startedAt: date,
+        finishedAt: date,
+        stats: { bsonType: "object" },
+        options: { bsonType: "object" },
+        error: { bsonType: "string" },
+        triggeredBy: objectId,
+      },
+    },
+    indexes: [{ key: { kind: 1, startedAt: -1 } }],
+  },
+  {
+    name: "sync_locks",
+    schema: {
+      bsonType: "object",
+      required: ["runId", "lockedUntil"],
+      properties: { _id: { bsonType: "string" }, runId: objectId, lockedUntil: date },
+    },
+    indexes: [],
   },
 ];
 

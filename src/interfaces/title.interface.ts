@@ -16,6 +16,8 @@ export interface TitleDto {
   tmdbId: number | null;
   imdbId: string | null;
   embedUrl: string | null;
+  backdropUrl: string | null;
+  quality: string | null;
   ratingAvg: number;
   ratingCount: number;
   likes: number;

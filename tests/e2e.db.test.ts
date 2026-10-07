@@ -81,12 +81,12 @@ describe.skipIf(!run)("flujo completo contra MongoDB", { timeout: 30_000 }, () =
     });
     expect(serie.statusCode).toBe(201); // temps/eps como int32 cumplen el validador
 
-    expect((await call("GET", `/titles/list?search=${tag}`)).json()).toHaveLength(0);
+    expect((await call("GET", `/titles/list?search=${tag}`)).json()).toEqual({ items: [], total: 0 });
     expect((await call("PATCH", `/titles/${titleId}/approve`, userToken)).statusCode).toBe(403);
     expect((await call("PATCH", `/titles/${titleId}/approve`, adminToken)).statusCode).toBe(200);
     expect((await call("PUT", `/titles/${titleId}/embed`, adminToken, { embedUrl: "https://example.com/e/1" })).statusCode).toBe(200);
     const shown = await call("GET", `/titles/list?search=${tag}&categoryId=${categoryId}`);
-    expect(shown.json()).toHaveLength(1);
+    expect(shown.json()).toMatchObject({ items: [{ id: titleId }], total: 1 });
     const detail = (await call("GET", `/titles/${titleId}`)).json();
     expect(detail).toMatchObject({ embedUrl: "https://example.com/e/1", creator: tag, categories: [{ id: categoryId }] });
     const serieDetail = (await call("GET", `/titles/${serie.json().id}`)).json();
@@ -151,6 +151,49 @@ describe.skipIf(!run)("flujo completo contra MongoDB", { timeout: 30_000 }, () =
     expect((await call("GET", "/admin/metrics", adminToken)).json().users).toBe(1);
   });
 
+  it("explorar: resumen por categoría, orden por valoración y paginación estable", async () => {
+    const { TitleModel } = await import("../src/models/title.model.js");
+    const cat = (await call("POST", "/categories/create", adminToken, { name: `${tag}-explorar` })).json().category.id;
+    const empty = (await call("POST", "/categories/create", adminToken, { name: `${tag}-vacia` })).json().category.id;
+    const ratings = [2, 5, 3.5];
+    const ids: string[] = [];
+    for (const [i, ratingAvg] of ratings.entries()) {
+      const r = await call("POST", "/titles/create", adminToken, {
+        title: `${tag}-explora-${i}`, description: "d", type: "movie", year: 2020, author: "a",
+        categoriesIds: [cat], posterUrl: `https://img.test/${i}.jpg`,
+      });
+      ids.push(r.json().id);
+      await call("PATCH", `/titles/${ids[i]}/approve`, adminToken);
+      await TitleModel.updateOne({ _id: ids[i] }, { $set: { ratingAvg, ratingCount: 1 } });
+    }
+    const pending = await call("POST", "/titles/create", adminToken, {
+      title: `${tag}-explora-pendiente`, description: "d", type: "movie", year: 2020, author: "a", categoriesIds: [cat],
+    });
+    expect(pending.statusCode).toBe(201); // pendiente: no cuenta
+
+    const movies = (await call("GET", "/categories/summary?type=movie")).json();
+    expect(movies.find((c: { id: string }) => c.id === cat)).toEqual({
+      id: cat, name: `${tag}-explorar`, count: 3, posterUrl: "https://img.test/1.jpg",
+    });
+    expect(movies.some((c: { id: string }) => c.id === empty)).toBe(false);
+    expect((await call("GET", "/categories/summary?type=anime")).json().some((c: { id: string }) => c.id === cat)).toBe(false);
+    expect((await call("GET", "/categories/summary")).json().some((c: { id: string }) => c.id === cat)).toBe(true);
+
+    const byRating = (await call("GET", `/titles/list?categoryId=${cat}&sort=rating`)).json();
+    expect(byRating.items.map((t: { ratingAvg: number }) => t.ratingAvg)).toEqual([5, 3.5, 2]);
+    const pages = [];
+    for (const skip of [0, 2]) {
+      const page = (await call("GET", `/titles/list?categoryId=${cat}&sort=popular&limit=2&skip=${skip}`)).json();
+      expect(page.total).toBe(3); // el total no depende de la página
+      pages.push(...page.items);
+    }
+    expect(new Set(pages.map((t: { id: string }) => t.id))).toEqual(new Set(ids));
+    expect(pages).toHaveLength(3);
+    const found = (await call("GET", `/titles/list?search=${tag}-EXPLORA-1&type=movie`)).json();
+    expect(found).toMatchObject({ items: [{ id: ids[1] }], total: 1 }); // sin distinguir mayúsculas
+    expect((await call("GET", `/titles/list?search=${encodeURIComponent(".*")}&categoryId=${cat}`)).json().total).toBe(0); // regex escapada
+  });
+
   it("recuperación de contraseña: un solo enlace vivo, de un solo uso, y solo el hash en la BD", async () => {
     const { env } = await import("../src/libs/env.js");
     const { hashToken } = await import("../src/libs/tokens.js");
@@ -188,5 +231,86 @@ describe.skipIf(!run)("flujo completo contra MongoDB", { timeout: 30_000 }, () =
     expect((await validate(token)).statusCode).toBe(400);
     expect(await PasswordResetTokenModel.countDocuments({ purpose: "password_reset" })).toBe(0);
     expect(await AuditLogModel.countDocuments({ action: "user.password_reset" })).toBe(1);
+  });
+
+  it("vimeus: sincroniza con un Vimeus simulado, con candado e idempotencia", async () => {
+    const { env } = await import("../src/libs/env.js");
+    const { TitleModel } = await import("../src/models/title.model.js");
+    const { vimeusSync } = await import("../src/services/vimeus/vimeusAdminServices.js");
+    const KEY = `${tag}-vimeus-key`;
+    const id = (n: number) => 990_000_000 + n;
+    const item = (path: string, n: number, title = `${tag}-v${n}`) => ({
+      tmdb_id: id(n), title, poster: `/p${n}.jpg`, backdrop: `/b${n}.jpg`, quality: "HD",
+      embed_url: `https://vimeus.com/e/${path}?tmdb=${id(n)}&view_key=vk${n}`,
+      download_url: `https://vimeus.com/d/${path}?tmdb=${id(n)}&view_key=vk${n}`,
+    });
+    const listings: Record<string, unknown[]> = {
+      animes: [item("anime", 1), item("anime", 2)],
+      series: [item("serie", 1), item("serie", 3), item("serie", 9, "")],
+      movies: [item("movie", 4), item("movie", 5, "$peligro"), item("movie", 6)],
+    };
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const fetchMock = vi.fn(async (input: string | URL) => {
+      await gate;
+      const url = new URL(String(input));
+      const kind = url.pathname.split("/").pop()!;
+      const result = url.searchParams.get("page") === "1" ? listings[kind] : [];
+      return new Response(JSON.stringify({ error: false, message: "Success", data: { pages: 1, result } }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const savedKey = env.VIMEUS_API_KEY;
+    env.VIMEUS_API_KEY = KEY;
+    // Película curada que ya existía: conserva su póster, recibe el reproductor nuevo.
+    await TitleModel.create({
+      type: "movie", title: `${tag}-curada`, description: "d", status: "approved", tmdb_id: id(4),
+      posterUrl: "https://img.test/curada.jpg", embed_url: "https://vimeus.com/e/movie?tmdb=1&view_key=viejo",
+      likes: 0, dislikes: 0, ratingAvg: 0, ratingCount: 0, createdAt: new Date(),
+    });
+    try {
+      const userJwt = app.jwt.sign({ id: userId, email: userEmail, role: "user" });
+      expect((await call("POST", "/admin/vimeus/sync", userJwt)).statusCode).toBe(403);
+      const started = await call("POST", "/admin/vimeus/sync", adminToken);
+      expect(started.statusCode).toBe(202);
+      expect((await call("POST", "/admin/vimeus/sync", adminToken)).statusCode).toBe(409); // candado
+      expect((await call("GET", "/admin/vimeus/sync", adminToken)).json()).toMatchObject({ configured: true, running: true });
+      release();
+      await vi.waitFor(async () => expect((await call("GET", "/admin/vimeus/sync", adminToken)).json().running).toBe(false), { timeout: 10_000 });
+      const status = await call("GET", "/admin/vimeus/sync", adminToken);
+      expect(status.json().last).toMatchObject({
+        id: started.json().runId, status: "success", trigger: "admin",
+        stats: {
+          animes: { created: 2, invalid: 0 },
+          series: { created: 1, skipped: 1, invalid: 1 },
+          movies: { created: 2, updated: 1 },
+        },
+      });
+      expect(status.body).not.toContain(KEY);
+      expect(fetchMock.mock.calls.every(([u]) => !String(u).includes(KEY))).toBe(true);
+
+      const synced = await TitleModel.find({ tmdb_id: { $gte: id(0), $lt: id(100) } }).lean();
+      expect(synced).toHaveLength(6);
+      expect(synced.every((t) => /^https:\/\/vimeus\.com\/e\/(movie|serie|anime)\?/.test(t.embed_url!))).toBe(true);
+      expect(JSON.stringify(synced)).not.toContain("download_url");
+      expect(new Set(synced.map((t) => `${t.tmdb_id}:${t.type}`)).size).toBe(6);
+      expect(synced.find((t) => t.tmdb_id === id(1))).toMatchObject({ type: "anime", embed_url: expect.stringContaining("/e/anime") });
+      expect(synced.find((t) => t.tmdb_id === id(4))).toMatchObject({
+        posterUrl: "https://img.test/curada.jpg", embed_url: expect.stringContaining("view_key=vk4"), quality: "HD",
+      });
+      expect(synced.find((t) => t.tmdb_id === id(4))!.source).toBeUndefined();
+      expect(synced.find((t) => t.tmdb_id === id(5))).toMatchObject({
+        title: "$peligro", description: "", status: "approved", source: "vimeus", likes: 0,
+        posterUrl: "https://image.tmdb.org/t/p/w500/p5.jpg", backdropUrl: "https://image.tmdb.org/t/p/w1280/b5.jpg",
+      });
+      const detail = (await call("GET", `/titles/${synced.find((t) => t.tmdb_id === id(5))!._id}`)).json();
+      expect(detail).toMatchObject({ backdropUrl: expect.stringContaining("/w1280/"), quality: "HD" });
+
+      const again = await vimeusSync.run({ trigger: "cli" });
+      expect(Object.values(again.stats).map((s) => s.created)).toEqual([0, 0, 0]);
+      expect(await TitleModel.countDocuments({ tmdb_id: { $gte: id(0), $lt: id(100) } })).toBe(6);
+    } finally {
+      env.VIMEUS_API_KEY = savedKey;
+      vi.unstubAllGlobals();
+    }
   });
 });

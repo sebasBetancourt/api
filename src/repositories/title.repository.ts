@@ -27,6 +27,8 @@ export function toTitleDto(t: any): TitleDto {
     tmdbId: t.tmdb_id ?? null,
     imdbId: t.imdb_id || null,
     embedUrl: t.embed_url || null,
+    backdropUrl: t.backdropUrl || null,
+    quality: t.quality || null,
     ratingAvg: t.ratingAvg ?? 0,
     ratingCount: t.ratingCount ?? 0,
     likes: t.likes ?? 0,
@@ -37,6 +39,8 @@ export function toTitleDto(t: any): TitleDto {
     creator: t.creator?.[0]?.name ?? null,
   };
 }
+
+export type TitleSort = "popular" | "rating" | "recent";
 
 export interface TitleFilters {
   skip: number;
@@ -56,8 +60,22 @@ function buildMatch(f: TitleFilters) {
   };
 }
 
-/** Orden natural (más antiguos primero), igual que el backend anterior: los títulos curados salen antes que los importados. */
-const listSort = { _id: 1 } as const;
+/**
+ * Sin `sort`: orden natural (más antiguos primero), igual que el backend anterior: los títulos curados salen
+ * antes que los importados. Todos acaban en `_id` para que paginar con skip no repita ni salte títulos.
+ */
+export function listSort(sort?: TitleSort): Record<string, 1 | -1> {
+  switch (sort) {
+    case "popular":
+      return { likes: -1, ratingCount: -1, ratingAvg: -1, _id: 1 };
+    case "rating":
+      return { ratingAvg: -1, ratingCount: -1, _id: 1 };
+    case "recent":
+      return { createdAt: -1, _id: -1 };
+    default:
+      return { _id: 1 };
+  }
+}
 
 async function findByIds(ids: string[]): Promise<TitleDto[]> {
   if (ids.length === 0) return [];
@@ -97,17 +115,11 @@ export const titleRepository = {
     return row ? toTitleDto(row) : null;
   },
 
-  async findAll(f: TitleFilters) {
-    const rows = await TitleModel.aggregate([
-      { $match: buildMatch(f) }, { $sort: listSort }, { $skip: f.skip }, { $limit: f.limit }, ...lookups,
-    ]);
-    return rows.map(toTitleDto);
-  },
-
-  async findPage(f: TitleFilters) {
+  /** Página y total de coincidencias. Por defecto, los más nuevos primero (lo que usa el admin). */
+  async findPage(f: TitleFilters, order: Record<string, 1 | -1> = { _id: -1 }) {
     const match = buildMatch(f);
     const [rows, total] = await Promise.all([
-      TitleModel.aggregate([{ $match: match }, { $sort: { _id: -1 } }, { $skip: f.skip }, { $limit: f.limit }, ...lookups]),
+      TitleModel.aggregate([{ $match: match }, { $sort: order }, { $skip: f.skip }, { $limit: f.limit }, ...lookups]),
       TitleModel.countDocuments(match),
     ]);
     return { items: rows.map(toTitleDto), total };
@@ -119,7 +131,7 @@ export const titleRepository = {
     const ids = [...new Set([...(user?.lists ?? []), ...(user?.favorites ?? [])].map(String))];
     if (ids.length === 0) return [];
     const match = { _id: { $in: oids(ids) }, ...(type && { type }) };
-    const rows = await TitleModel.aggregate([{ $match: match }, { $sort: listSort }, { $skip: skip }, { $limit: limit }, ...lookups]);
+    const rows = await TitleModel.aggregate([{ $match: match }, { $sort: listSort() }, { $skip: skip }, { $limit: limit }, ...lookups]);
     return rows.map(toTitleDto);
   },
 

@@ -10,7 +10,13 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:setup": "tsx scripts/db-setup.ts",
-    "seed": "tsx scripts/seed.ts"
+    "seed": "tsx scripts/seed.ts",
+    "db:tmdb-index": "tsx scripts/migrate-tmdb-index.ts",
+    "sync:vimeus": "tsx scripts/sync-vimeus.ts",
+    "link:vimeus-curated": "tsx scripts/link-vimeus-curated.ts",
+    "clone:catalog": "tsx scripts/clone-catalog.ts",
+    "categories:normalize": "tsx scripts/normalize-categories.ts",
+    "categories:backfill": "tsx scripts/backfill-categories-from-tmdb.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.3.0",
@@ -25,6 +31,7 @@
     "fastify": "^5.12.5",
     "fastify-type-provider-zod": "^7.0.0",
     "mongoose": "^8.24.4",
+    "node-cron": "^4.6.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {

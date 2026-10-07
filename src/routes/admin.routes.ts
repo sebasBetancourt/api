@@ -19,4 +19,6 @@ export async function adminRoutes(app: FastifyInstance) {
   r.patch("/users/:id/role", { ...admin, schema: { params: idParams, body: setRoleBody, tags } }, c.setRole as never);
   r.patch("/users/:id/status", { ...admin, schema: { params: idParams, body: setStatusBody, tags } }, c.setStatus as never);
   r.delete("/users/:id", { ...admin, schema: { params: idParams, tags } }, c.deleteUser as never);
+  r.post("/vimeus/sync", { ...admin, schema: { tags } }, c.startVimeusSync as never);
+  r.get("/vimeus/sync", { ...admin, schema: { tags } }, c.vimeusSyncStatus as never);
 }

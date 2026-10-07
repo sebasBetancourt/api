@@ -1,3 +1,4 @@
+import type { TitleType } from "../../interfaces/title.interface.js";
 import { AppError } from "../../libs/appError.js";
 import { isDuplicateKey } from "../../libs/mongoHelpers.js";
 import { categoryRepository } from "../../repositories/category.repository.js";
@@ -13,6 +14,8 @@ export async function createCategoryService(name: string) {
 
 export const listCategoriesService = (skip: number, limit: number) =>
   categoryRepository.findAll(skip, limit);
+
+export const getCategorySummaryService = (type?: TitleType) => categoryRepository.summary(type);
 
 export async function getCategoryByIdService(id: string) {
   const c = await categoryRepository.findById(id);

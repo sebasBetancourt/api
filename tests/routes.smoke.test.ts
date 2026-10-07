@@ -19,9 +19,17 @@ describe("seguridad de rutas", () => {
     ["DELETE", "/api/v1/reviews/00000000-0000-4000-8000-000000000000"],
     ["POST", "/api/v1/titles/create"],
     ["GET", "/api/v1/reviews/csv"],
+    ["POST", "/api/v1/admin/vimeus/sync"],
+    ["GET", "/api/v1/admin/vimeus/sync"],
   ])("%s %s exige token", async (method, url) => {
     const res = await app.inject({ method: method as "GET", url });
     expect(res.statusCode).toBe(401);
+  });
+  it.each([
+    "/api/v1/categories/summary?type=documental",
+    "/api/v1/titles/list?sort=aleatorio",
+  ])("GET %s con query inválida da 400", async (url) => {
+    expect((await app.inject(url)).statusCode).toBe(400);
   });
   it("login con body inválido da 400", async () => {
     const res = await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { email: "x" } });
@@ -42,6 +50,11 @@ describe("seguridad de rutas", () => {
     expect(limited.json().message).toMatch(/Demasiadas solicitudes/);
     // El límite es por ruta: login sigue respondiendo con normalidad.
     expect((await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { email: "x" } })).statusCode).toBe(400);
+  });
+  it("un usuario normal no puede lanzar la sincronización con Vimeus (403)", async () => {
+    const token = app.jwt.sign({ id: "u", email: "a@b.c", role: "user" });
+    const res = await app.inject({ method: "POST", url: "/api/v1/admin/vimeus/sync", headers: { authorization: `Bearer ${token}` } });
+    expect(res.statusCode).toBe(403);
   });
   it("un usuario normal no puede crear categorías (403)", async () => {
     const token = app.jwt.sign({ id: "u", email: "a@b.c", role: "user" });
