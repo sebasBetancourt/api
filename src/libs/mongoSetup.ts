@@ -131,6 +131,29 @@ const specs: CollectionSpec[] = [
     },
     indexes: [{ key: { actorId: 1 } }, { key: { targetType: 1, targetId: 1 } }, { key: { createdAt: -1 } }],
   },
+  {
+    // Tokens de un solo uso (recuperación de contraseña). Solo se guarda el hash; el TTL los borra al vencer.
+    name: "tokens",
+    schema: {
+      bsonType: "object",
+      required: ["userId", "hash", "createdAt", "expiresAt"],
+      properties: {
+        userId: objectId,
+        hash: { bsonType: "string" },
+        purpose: { bsonType: "string" },
+        deviceInfo: { bsonType: "string" },
+        ip: { bsonType: "string" },
+        createdAt: date,
+        expiresAt: date,
+        revoked: { bsonType: "bool" },
+      },
+    },
+    indexes: [
+      { key: { userId: 1 } },
+      { key: { hash: 1 } },
+      { key: { expiresAt: 1 }, options: { expireAfterSeconds: 0 } },
+    ],
+  },
 ];
 
 export async function setupCollections(db: Db) {

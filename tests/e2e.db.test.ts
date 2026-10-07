@@ -1,6 +1,6 @@
 // Integración contra MongoDB real, en una BD SEPARADA (DB_NAME_TEST) con los validadores
 // $jsonSchema estrictos aplicados. Se omite salvo que RUN_DB_TESTS=1. Nunca toca DB_NAME.
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 const run = process.env.RUN_DB_TESTS === "1";
 const tag = `e2e${Date.now()}`;
@@ -12,6 +12,11 @@ describe.skipIf(!run)("flujo completo contra MongoDB", { timeout: 30_000 }, () =
   let adminToken = "", userToken = "", titleId = "", reviewId = "", categoryId = "", userId = "";
   const adminEmail = `${tag}-admin@test.dev`;
   const userEmail = `${tag}-user@test.dev`;
+  const resetLinks: string[] = [];
+  const nextToken = async (n: number) => {
+    await vi.waitFor(() => expect(resetLinks).toHaveLength(n));
+    return new URL(resetLinks[n - 1]).searchParams.get("token")!;
+  };
 
   const call = (method: string, url: string, token?: string, payload?: object) =>
     app.inject({
@@ -26,7 +31,9 @@ describe.skipIf(!run)("flujo completo contra MongoDB", { timeout: 30_000 }, () =
     const conn = await mongo.connectMongo(env.DB_NAME_TEST);
     await (await import("../src/libs/mongoSetup.js")).setupCollections(conn.db!);
     UserModel = (await import("../src/models/user.model.js")).UserModel;
-    app = await (await import("../src/app.js")).buildApp();
+    app = await (await import("../src/app.js")).buildApp({
+      resetLinkSender: { send: async (_email, link) => void resetLinks.push(link) },
+    });
   });
 
   afterAll(async () => {
@@ -142,5 +149,44 @@ describe.skipIf(!run)("flujo completo contra MongoDB", { timeout: 30_000 }, () =
     expect((await call("POST", "/auth/login", undefined, { email: userEmail, password: "secret123" })).statusCode).toBe(403);
     expect((await call("DELETE", `/admin/users/${userId}`, adminToken)).statusCode).toBe(200);
     expect((await call("GET", "/admin/metrics", adminToken)).json().users).toBe(1);
+  });
+
+  it("recuperación de contraseña: un solo enlace vivo, de un solo uso, y solo el hash en la BD", async () => {
+    const { env } = await import("../src/libs/env.js");
+    const { hashToken } = await import("../src/libs/tokens.js");
+    const { PasswordResetTokenModel } = await import("../src/models/passwordResetToken.model.js");
+    const { AuditLogModel } = await import("../src/models/auditLog.model.js");
+    const forgot = (email: string) => call("POST", "/auth/forgot-password", undefined, { email });
+    const validate = (token: string) => call("POST", "/auth/reset-password/validate", undefined, { token });
+    const reset = (token: string, password: string) => call("POST", "/auth/reset-password", undefined, { token, password });
+    const login = (password: string) => call("POST", "/auth/login", undefined, { email: adminEmail, password });
+
+    const unknown = await forgot(`${tag}-nadie@test.dev`);
+    const known = await forgot(adminEmail);
+    expect(unknown.statusCode).toBe(200);
+    expect(unknown.json()).toEqual(known.json());
+    const oldToken = await nextToken(1);
+    await forgot(adminEmail);
+    const token = await nextToken(2);
+    expect(resetLinks).toHaveLength(2); // el correo inexistente no generó enlace
+
+    expect((await validate(oldToken)).statusCode).toBe(400); // pedir otro invalida el anterior
+    expect((await validate(token)).json()).toEqual({ valid: true });
+    const stored = await PasswordResetTokenModel.find({ purpose: "password_reset" }).lean();
+    expect(stored).toHaveLength(1);
+    expect(stored[0].hash).toBe(hashToken(token));
+    expect(JSON.stringify(stored)).not.toContain(token);
+    const ttlMs = stored[0].expiresAt.getTime() - Date.now();
+    expect(ttlMs).toBeGreaterThan((env.PASSWORD_RESET_TTL_MINUTES - 1) * 60_000);
+    expect(ttlMs).toBeLessThanOrEqual(env.PASSWORD_RESET_TTL_MINUTES * 60_000);
+
+    expect((await reset(token, "123")).statusCode).toBe(400); // misma regla que el registro
+    expect((await reset(token, "nueva456")).statusCode).toBe(200);
+    expect((await login("secret123")).statusCode).toBe(401);
+    expect((await login("nueva456")).statusCode).toBe(200);
+    expect((await reset(token, "otra7890")).statusCode).toBe(400);
+    expect((await validate(token)).statusCode).toBe(400);
+    expect(await PasswordResetTokenModel.countDocuments({ purpose: "password_reset" })).toBe(0);
+    expect(await AuditLogModel.countDocuments({ action: "user.password_reset" })).toBe(1);
   });
 });

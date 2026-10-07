@@ -33,3 +33,10 @@ legacy/          backend Express anterior (referencia)
 - Las colecciones tienen validadores `$jsonSchema` estrictos (ver `src/libs/mongoSetup.ts`): los modelos omiten campos en vez de guardar `null`, y `temps/eps` se guardan como `int32`.
 - Favoritos: `?list=watchlist` usa `users.lists` (campo legacy) y `?list=favorites` usa `users.favorites`.
 - Los likes se ajustan por delta para conservar los contadores históricos de reseñas.
+
+## Recuperación de contraseña
+`POST /auth/forgot-password` → `POST /auth/reset-password/validate` → `POST /auth/reset-password`.
+- El token es aleatorio (32 bytes), caduca a los `PASSWORD_RESET_TTL_MINUTES` (30) y es de un solo uso; en la colección `tokens` solo se guarda su hash SHA-256 (`purpose: "password_reset"`), que el índice TTL borra al vencer.
+- `forgot-password` responde siempre lo mismo, exista o no el correo. Límites: 5 cada 15 min por IP y por correo; 10 cada 15 min por IP en las otras dos.
+- **Aún no se envían correos**: el enlace (`<primer FRONTEND_URL>/reset-password?token=…`) se escribe en los logs del backend, y en producción solo si `PASSWORD_RESET_LOG_LINK=true`. Así, en producción el flujo no entrega el enlace a nadie hasta que haya SMTP: basta implementar `ResetLinkSender` (`src/libs/resetLinkSender.ts`) y pasarlo en `buildApp`.
+- Los JWT emitidos antes del cambio siguen vivos hasta que caducan (`JWT_EXPIRES_IN`).

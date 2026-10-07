@@ -27,6 +27,22 @@ describe("seguridad de rutas", () => {
     const res = await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { email: "x" } });
     expect(res.statusCode).toBe(400);
   });
+  it.each([
+    ["/api/v1/auth/reset-password/validate", { token: "corto" }],
+    ["/api/v1/auth/reset-password", { token: "a".repeat(43), password: "123" }],
+    ["/api/v1/auth/reset-password", { password: "secret123" }],
+  ])("POST %s con body inválido da 400", async (url, payload) => {
+    expect((await app.inject({ method: "POST", url, payload })).statusCode).toBe(400);
+  });
+  it("forgot-password: body inválido da 400 y la 6.ª petición en la ventana da 429", async () => {
+    const ask = () => app.inject({ method: "POST", url: "/api/v1/auth/forgot-password", payload: { email: "no-es-correo" } });
+    for (let i = 0; i < 5; i++) expect((await ask()).statusCode).toBe(400);
+    const limited = await ask();
+    expect(limited.statusCode).toBe(429);
+    expect(limited.json().message).toMatch(/Demasiadas solicitudes/);
+    // El límite es por ruta: login sigue respondiendo con normalidad.
+    expect((await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { email: "x" } })).statusCode).toBe(400);
+  });
   it("un usuario normal no puede crear categorías (403)", async () => {
     const token = app.jwt.sign({ id: "u", email: "a@b.c", role: "user" });
     const res = await app.inject({

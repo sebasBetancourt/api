@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { passwordSchema } from "./auth.schema.js";
 
 export const updateMeBody = z
   .object({
@@ -18,7 +19,7 @@ export const preferencesBody = z.object({
 
 export const changePasswordBody = z.object({
   currentPassword: z.string().min(1),
-  newPassword: z.string().min(6),
+  newPassword: passwordSchema,
 });
 
 export const deleteAccountBody = z.object({ password: z.string().min(1) });
