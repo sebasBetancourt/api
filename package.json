@@ -11,6 +11,7 @@
     "test": "vitest run",
     "db:setup": "tsx scripts/db-setup.ts",
     "seed": "tsx scripts/seed.ts",
+    "db:tmdb-index": "tsx scripts/migrate-tmdb-index.ts",
     "clone:catalog": "tsx scripts/clone-catalog.ts",
     "categories:normalize": "tsx scripts/normalize-categories.ts",
     "categories:backfill": "tsx scripts/backfill-categories-from-tmdb.ts"

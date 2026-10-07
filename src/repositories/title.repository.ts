@@ -27,6 +27,8 @@ export function toTitleDto(t: any): TitleDto {
     tmdbId: t.tmdb_id ?? null,
     imdbId: t.imdb_id || null,
     embedUrl: t.embed_url || null,
+    backdropUrl: t.backdropUrl || null,
+    quality: t.quality || null,
     ratingAvg: t.ratingAvg ?? 0,
     ratingCount: t.ratingCount ?? 0,
     likes: t.likes ?? 0,

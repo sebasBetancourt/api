@@ -8,7 +8,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import mongoose, { type Types } from "mongoose";
 import { connectMongo, disconnectMongo } from "../src/libs/mongo.js";
-import { foldName, genresToCategoryNames, parseTarget } from "./lib/categoryData.js";
+import { foldName, genresToCategoryNames } from "./lib/categoryData.js";
+import { parseTarget } from "./lib/target.js";
 
 type Kind = "movie" | "tv";
 interface TitleRow {

@@ -7,7 +7,8 @@
  */
 import type { Types } from "mongoose";
 import { connectMongo, disconnectMongo } from "../src/libs/mongo.js";
-import { parseTarget, planRenames } from "./lib/categoryData.js";
+import { planRenames } from "./lib/categoryData.js";
+import { parseTarget } from "./lib/target.js";
 
 const { dbName, apply } = parseTarget();
 const categories = (await connectMongo(dbName)).db!.collection<{ _id: Types.ObjectId; name: string }>("categories");
