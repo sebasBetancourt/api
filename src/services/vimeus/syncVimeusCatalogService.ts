@@ -198,7 +198,7 @@ export function createVimeusSync({ client, titles = titleSyncRepository, runs: r
 
       const status: SyncRunStatus = kinds.every((k) => stats[k].complete) ? "success" : "partial";
       await runs.finish(runId, { status, stats });
-      return { runId: String(runId), status, stats, notes, possibleDuplicates };
+      return { runId: String(runId), status, stats, notes, possibleDuplicates: [...new Set(possibleDuplicates)] };
     } catch (e) {
       const known = e instanceof VimeusFatalError || e instanceof AppError;
       const message = known ? (e as Error).message : "Error interno durante la sincronización.";
