@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "db:setup": "tsx scripts/db-setup.ts",
-    "seed": "tsx scripts/seed.ts"
+    "seed": "tsx scripts/seed.ts",
+    "clone:catalog": "tsx scripts/clone-catalog.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.3.0",
