@@ -1,15 +1,18 @@
 import { AppError } from "../../libs/appError.js";
-import { titleRepository } from "../../repositories/title.repository.js";
+import { listSort, titleRepository } from "../../repositories/title.repository.js";
 import { categoryRepository } from "../../repositories/category.repository.js";
 import type { ListTitlesQuery, UpdateTitleInput } from "../../schemas/title.schema.js";
 
-/** El listado público solo expone títulos aprobados. */
+/** El listado público solo expone títulos aprobados; devuelve la página y el total para paginar. */
 export const listTitlesService = (q: ListTitlesQuery) =>
-  titleRepository.findAll({
-    skip: q.skip, limit: q.limit, type: q.type,
-    categoryId: q.categoryId ?? q.categoriesId, search: q.search || undefined,
-    status: "approved", sort: q.sort,
-  });
+  titleRepository.findPage(
+    {
+      skip: q.skip, limit: q.limit, type: q.type,
+      categoryId: q.categoryId ?? q.categoriesId, search: q.search || undefined,
+      status: "approved",
+    },
+    listSort(q.sort),
+  );
 
 export const listCollectionService = (
   userId: string, skip: number, limit: number, type?: "movie" | "tv" | "anime",

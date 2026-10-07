@@ -23,7 +23,7 @@ export const listTitlesQuery = z.object({
   categoryId: objectId.optional(),
   // alias heredado del frontend
   categoriesId: objectId.optional(),
-  search: z.string().trim().optional(),
+  search: z.string().trim().max(100).optional(),
   /** Sin valor se conserva el orden natural (el que usa el Home). */
   sort: titleSortEnum.optional(),
 });

@@ -49,7 +49,6 @@ export interface TitleFilters {
   categoryId?: string;
   search?: string;
   status?: TitleStatus;
-  sort?: TitleSort;
 }
 
 function buildMatch(f: TitleFilters) {
@@ -116,17 +115,11 @@ export const titleRepository = {
     return row ? toTitleDto(row) : null;
   },
 
-  async findAll(f: TitleFilters) {
-    const rows = await TitleModel.aggregate([
-      { $match: buildMatch(f) }, { $sort: listSort(f.sort) }, { $skip: f.skip }, { $limit: f.limit }, ...lookups,
-    ]);
-    return rows.map(toTitleDto);
-  },
-
-  async findPage(f: TitleFilters) {
+  /** Página y total de coincidencias. Por defecto, los más nuevos primero (lo que usa el admin). */
+  async findPage(f: TitleFilters, order: Record<string, 1 | -1> = { _id: -1 }) {
     const match = buildMatch(f);
     const [rows, total] = await Promise.all([
-      TitleModel.aggregate([{ $match: match }, { $sort: { _id: -1 } }, { $skip: f.skip }, { $limit: f.limit }, ...lookups]),
+      TitleModel.aggregate([{ $match: match }, { $sort: order }, { $skip: f.skip }, { $limit: f.limit }, ...lookups]),
       TitleModel.countDocuments(match),
     ]);
     return { items: rows.map(toTitleDto), total };

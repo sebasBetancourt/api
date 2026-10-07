@@ -81,12 +81,12 @@ describe.skipIf(!run)("flujo completo contra MongoDB", { timeout: 30_000 }, () =
     });
     expect(serie.statusCode).toBe(201); // temps/eps como int32 cumplen el validador
 
-    expect((await call("GET", `/titles/list?search=${tag}`)).json()).toHaveLength(0);
+    expect((await call("GET", `/titles/list?search=${tag}`)).json()).toEqual({ items: [], total: 0 });
     expect((await call("PATCH", `/titles/${titleId}/approve`, userToken)).statusCode).toBe(403);
     expect((await call("PATCH", `/titles/${titleId}/approve`, adminToken)).statusCode).toBe(200);
     expect((await call("PUT", `/titles/${titleId}/embed`, adminToken, { embedUrl: "https://example.com/e/1" })).statusCode).toBe(200);
     const shown = await call("GET", `/titles/list?search=${tag}&categoryId=${categoryId}`);
-    expect(shown.json()).toHaveLength(1);
+    expect(shown.json()).toMatchObject({ items: [{ id: titleId }], total: 1 });
     const detail = (await call("GET", `/titles/${titleId}`)).json();
     expect(detail).toMatchObject({ embedUrl: "https://example.com/e/1", creator: tag, categories: [{ id: categoryId }] });
     const serieDetail = (await call("GET", `/titles/${serie.json().id}`)).json();
@@ -180,13 +180,18 @@ describe.skipIf(!run)("flujo completo contra MongoDB", { timeout: 30_000 }, () =
     expect((await call("GET", "/categories/summary")).json().some((c: { id: string }) => c.id === cat)).toBe(true);
 
     const byRating = (await call("GET", `/titles/list?categoryId=${cat}&sort=rating`)).json();
-    expect(byRating.map((t: { ratingAvg: number }) => t.ratingAvg)).toEqual([5, 3.5, 2]);
+    expect(byRating.items.map((t: { ratingAvg: number }) => t.ratingAvg)).toEqual([5, 3.5, 2]);
     const pages = [];
     for (const skip of [0, 2]) {
-      pages.push(...(await call("GET", `/titles/list?categoryId=${cat}&sort=popular&limit=2&skip=${skip}`)).json());
+      const page = (await call("GET", `/titles/list?categoryId=${cat}&sort=popular&limit=2&skip=${skip}`)).json();
+      expect(page.total).toBe(3); // el total no depende de la página
+      pages.push(...page.items);
     }
     expect(new Set(pages.map((t: { id: string }) => t.id))).toEqual(new Set(ids));
     expect(pages).toHaveLength(3);
+    const found = (await call("GET", `/titles/list?search=${tag}-EXPLORA-1&type=movie`)).json();
+    expect(found).toMatchObject({ items: [{ id: ids[1] }], total: 1 }); // sin distinguir mayúsculas
+    expect((await call("GET", `/titles/list?search=${encodeURIComponent(".*")}&categoryId=${cat}`)).json().total).toBe(0); // regex escapada
   });
 
   it("recuperación de contraseña: un solo enlace vivo, de un solo uso, y solo el hash en la BD", async () => {
