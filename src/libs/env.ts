@@ -13,6 +13,13 @@ const envSchema = z.object({
   PASSWORD_RESET_TTL_MINUTES: z.coerce.number().int().min(1).default(30),
   /** Imprime el enlace de recuperación en los logs aunque NODE_ENV sea production. */
   PASSWORD_RESET_LOG_LINK: z.stringbool().default(false),
+  /** Clave de la API de listados de Vimeus (solo servidor). Se acepta el nombre antiguo VIMEO_API_KEY. */
+  VIMEUS_API_KEY: z.string().trim().optional(),
+  VIMEO_API_KEY: z.string().trim().optional(),
+  VIMEUS_BASE_URL: z.url().default("https://vimeus.com"),
+  VIMEUS_SYNC_ENABLED: z.stringbool().default(false),
+  VIMEUS_SYNC_CRON: z.string().default("0 4 * * *"),
 });
 
-export const env = envSchema.parse(process.env);
+const parsed = envSchema.parse(process.env);
+export const env = { ...parsed, VIMEUS_API_KEY: parsed.VIMEUS_API_KEY || parsed.VIMEO_API_KEY || undefined };
