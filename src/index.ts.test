@@ -1,0 +1,3 @@
+import { buildApp } from "./app.js";
+const app = await buildApp();
+console.log("App built successfully");
