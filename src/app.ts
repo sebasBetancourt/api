@@ -15,6 +15,7 @@ import { API_PREFIX } from "./constants/globalConstants.js";
 import { env } from "./libs/env.js";
 import { ConsoleResetLinkSender, type ResetLinkSender } from "./libs/resetLinkSender.js";
 import { errorHandler } from "./middlewares/errorHandler.js";
+import { vimeusScheduler } from "./plugins/vimeusScheduler.js";
 import { adminRoutes } from "./routes/admin.routes.js";
 import { favoritesRoutes } from "./routes/favorites.routes.js";
 import { meRoutes } from "./routes/me.routes.js";
@@ -25,6 +26,8 @@ import { titlesRoutes } from "./routes/titles.routes.js";
 
 export interface BuildAppOptions {
   resetLinkSender?: ResetLinkSender;
+  /** Programa la sincronización diaria con Vimeus (por defecto según VIMEUS_SYNC_ENABLED). */
+  scheduleVimeusSync?: boolean;
 }
 
 export async function buildApp(opts: BuildAppOptions = {}) {
@@ -54,6 +57,7 @@ export async function buildApp(opts: BuildAppOptions = {}) {
   await app.register(meRoutes, { prefix: `${API_PREFIX}/me` });
   await app.register(favoritesRoutes, { prefix: `${API_PREFIX}/favorites` });
   await app.register(adminRoutes, { prefix: `${API_PREFIX}/admin` });
+  if (opts.scheduleVimeusSync ?? env.VIMEUS_SYNC_ENABLED) await app.register(vimeusScheduler);
 
   return app;
 }

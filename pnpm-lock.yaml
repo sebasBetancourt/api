@@ -44,6 +44,9 @@ importers:
       mongoose:
         specifier: ^8.24.4
         version: 8.24.4
+      node-cron:
+        specifier: ^4.6.0
+        version: 4.6.0
       zod:
         specifier: ^4.6.5
         version: 4.6.5
@@ -1185,6 +1188,10 @@ packages:
     resolution: {integrity: sha512-Y2tUNy4ouw6tq5oDSKeQYGOyhkUBhNOcGV/02KC+6kd9eDGqdZd++mjMiIDilrBYvjEnCYvVtsuHCuP+okSfug==}
     engines: {node: ^10 || ^12 || ^13.7 || ^14 || >=15.0.1}
     hasBin: true
+
+  node-cron@4.6.0:
+    resolution: {integrity: sha512-Si/bzYiKRHOB8/a99T2+SDGN582ONDMSTlJr5oCkT6GtnqPjZ2s10eoQRYkW9ZHwjVxONL+W8Fb+qR0AHMQsdg==}
+    engines: {node: '>=20'}
 
   object-assign@4.1.1:
     resolution: {integrity: sha512-rJgTQnkUnH1sFw8yT6VSU3zD3sWmu6sZhIseY8VX+GRu3P6F7Fu+JNDoXfklElbLJSnc3FUQHVe4cU5hj+BcUg==}
@@ -2447,6 +2454,8 @@ snapshots:
       thenify-all: 1.6.0
 
   nanoid@3.3.19: {}
+
+  node-cron@4.6.0: {}
 
   object-assign@4.1.1: {}
 

@@ -23,17 +23,23 @@ export const syncRunRepository = {
     }
   },
 
-  renewLock: (name: string, runId: Types.ObjectId, ttlMs: number) =>
-    SyncLockModel.updateOne({ _id: name, runId }, { $set: { lockedUntil: new Date(Date.now() + ttlMs) } }),
+  async renewLock(name: string, runId: Types.ObjectId, ttlMs: number) {
+    await SyncLockModel.updateOne({ _id: name, runId }, { $set: { lockedUntil: new Date(Date.now() + ttlMs) } });
+  },
 
-  releaseLock: (name: string, runId: Types.ObjectId) => SyncLockModel.deleteOne({ _id: name, runId }),
+  async releaseLock(name: string, runId: Types.ObjectId) {
+    await SyncLockModel.deleteOne({ _id: name, runId });
+  },
 
-  create: (run: NewSyncRun & { _id: Types.ObjectId }) => SyncRunModel.create(run),
+  async create(run: NewSyncRun & { _id: Types.ObjectId }) {
+    await SyncRunModel.create(run);
+  },
 
-  finish: (id: Types.ObjectId, patch: Pick<SyncRunDoc, "status" | "stats"> & { error?: string }) =>
-    SyncRunModel.updateOne({ _id: id }, { $set: { ...patch, finishedAt: new Date() } }),
-
-  saveStats: (id: Types.ObjectId, stats: SyncRunDoc["stats"]) => SyncRunModel.updateOne({ _id: id }, { $set: { stats } }),
+  async finish(id: Types.ObjectId, patch: Pick<SyncRunDoc, "status" | "stats"> & { error?: string }) {
+    await SyncRunModel.updateOne({ _id: id }, { $set: { ...patch, finishedAt: new Date() } });
+  },
 
   latest: (kind: string) => SyncRunModel.findOne({ kind }).sort({ startedAt: -1 }).lean(),
+
+  isLocked: (name: string) => SyncLockModel.exists({ _id: name, lockedUntil: { $gt: new Date() } }).then((r) => !!r),
 };

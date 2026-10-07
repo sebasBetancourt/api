@@ -67,10 +67,21 @@ export interface SyncDeps {
   log?: Logger;
 }
 
-export function createVimeusSync({ client, titles = titleSyncRepository, runs = syncRunRepository, log = console }: SyncDeps = {}) {
+/** En dry-run no se escribe nada en la BD, ni siquiera el registro de la corrida o el candado. */
+const noRecord: typeof syncRunRepository = {
+  ...syncRunRepository,
+  acquireLock: async () => true,
+  renewLock: async () => {},
+  releaseLock: async () => {},
+  create: async () => {},
+  finish: async () => {},
+};
+
+export function createVimeusSync({ client, titles = titleSyncRepository, runs: recordedRuns = syncRunRepository, log = console }: SyncDeps = {}) {
   /** Toma el candado y registra la corrida; 409 si ya hay otra. `execute` hace el trabajo y suelta el candado. */
   async function start(opts: SyncOptions) {
     const vimeus = client ?? clientFromEnv();
+    const runs = opts.dryRun ? noRecord : recordedRuns;
     const runId = runs.newId();
     if (!(await runs.acquireLock(SYNC_LOCK, runId, LOCK_TTL_MS))) {
       throw new AppError(409, "Ya hay una sincronización con Vimeus en curso.");
@@ -87,11 +98,11 @@ export function createVimeusSync({ client, titles = titleSyncRepository, runs = 
       await runs.releaseLock(SYNC_LOCK, runId);
       throw e;
     }
-    return { runId: String(runId), execute: () => execute(vimeus, runId, startedAt, kinds, opts) };
+    return { runId: String(runId), execute: () => execute(vimeus, runs, runId, startedAt, kinds, opts) };
   }
 
   async function execute(
-    vimeus: VimeusClient, runId: Types.ObjectId, runStart: Date, kinds: VimeusKind[], opts: SyncOptions,
+    vimeus: VimeusClient, runs: typeof syncRunRepository, runId: Types.ObjectId, runStart: Date, kinds: VimeusKind[], opts: SyncOptions,
   ): Promise<SyncResult> {
     const stats: Record<string, SyncKindStats> = {};
     const notes: string[] = [];

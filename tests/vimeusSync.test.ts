@@ -78,7 +78,6 @@ function fakeRuns() {
     releaseLock: async (_: string, runId: mongoose.Types.ObjectId) => void (lock?.runId.equals(runId) && (lock = null)),
     create: async (run: { _id: mongoose.Types.ObjectId }) => void runs.set(String(run._id), { ...run }),
     finish: async (id: mongoose.Types.ObjectId, patch: object) => void Object.assign(runs.get(String(id))!, patch),
-    saveStats: async () => {},
     latest: async () => null,
     get locked() {
       return lock !== null;
@@ -110,10 +109,11 @@ function setup(docs: Doc[], listings: Partial<Record<VimeusKind, unknown[]>>, op
 describe("sincronización con Vimeus", () => {
   it("dry-run informa sin escribir", async () => {
     const existing: Doc = { _id: new mongoose.Types.ObjectId(), type: "movie", title: "Vieja", tmdb_id: 1, embed_url: "x" };
-    const { run, titles } = setup([existing], { movies: [raw("movies", 1), raw("movies", 2)] });
+    const { run, titles, runs } = setup([existing], { movies: [raw("movies", 1), raw("movies", 2)] });
     const r = await run({ dryRun: true, kinds: ["movies"] });
     expect(r.stats.movies).toMatchObject({ fetched: 2, created: 1, updated: 1, complete: true });
     expect(titles.upsertMany).not.toHaveBeenCalled();
+    expect(runs.runs.size).toBe(0); // ni registro de corrida ni candado
     expect(existing.embed_url).toBe("x");
   });
 
