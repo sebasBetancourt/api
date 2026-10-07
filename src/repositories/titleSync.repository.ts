@@ -57,6 +57,13 @@ export const titleSyncRepository = {
     return new Set(rows.map((r) => r.tmdb_id!));
   },
 
+  /** `tmdb_id` que ya tienen el reproductor de anime de Vimeus: el listado de series no debe pisarlos. */
+  async findAnimeTmdbIds(tmdbIds: number[]) {
+    const rows = await TitleModel.find({ tmdb_id: { $in: tmdbIds }, embed_url: { $regex: /^https:\/\/vimeus\.com\/e\/anime\?/ } })
+      .select("tmdb_id").lean();
+    return new Set(rows.map((r) => r.tmdb_id!));
+  },
+
   async findUsedImdbIds(imdbIds: string[]) {
     const rows = await TitleModel.find({ imdb_id: { $in: imdbIds } }).select("imdb_id tmdb_id type").lean();
     return new Map(rows.map((r) => [r.imdb_id!, r]));

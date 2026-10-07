@@ -34,6 +34,8 @@ function fakeTitles(docs: Doc[], legacyIndex = false) {
       new Map(docs.filter((d) => ids.includes(d.tmdb_id!) && inNs(type, d)).map((d) => [d.tmdb_id!, { ...d }])),
     findForeignTmdbIds: async (type: TitleType, ids: number[]) =>
       new Set(docs.filter((d) => ids.includes(d.tmdb_id!) && !inNs(type, d)).map((d) => d.tmdb_id!)),
+    findAnimeTmdbIds: async (ids: number[]) =>
+      new Set(docs.filter((d) => ids.includes(d.tmdb_id!) && d.embed_url?.startsWith("https://vimeus.com/e/anime?")).map((d) => d.tmdb_id!)),
     findUsedImdbIds: async (ids: string[]) => new Map(docs.filter((d) => d.imdb_id && ids.includes(d.imdb_id)).map((d) => [d.imdb_id!, d])),
     findUnlinkedByTitle: async (type: TitleType, titles: string[]) =>
       docs.filter((d) => inNs(type, d) && d.tmdb_id === undefined && titles.includes(d.title)),
@@ -130,6 +132,14 @@ describe("sincronización con Vimeus", () => {
     const { run, docs } = setup([], { animes: [raw("animes", 10)], series: [raw("series", 10), raw("series", 11)] });
     const r = await run();
     expect(r.stats.series).toMatchObject({ skipped: 1, created: 1 });
+    expect(docs.filter((d) => d.tmdb_id === 10)).toEqual([expect.objectContaining({ type: "anime", embed_url: embed("anime", 10) })]);
+  });
+
+  it("sincronizar solo series no pisa el reproductor de un anime ya sincronizado", async () => {
+    const { run, docs } = setup([], { animes: [raw("animes", 10)], series: [raw("series", 10), raw("series", 11)] });
+    await run({ kinds: ["animes"] });
+    const r = await run({ kinds: ["series"] });
+    expect(r.stats.series).toMatchObject({ skipped: 1, created: 1, updated: 0 });
     expect(docs.filter((d) => d.tmdb_id === 10)).toEqual([expect.objectContaining({ type: "anime", embed_url: embed("anime", 10) })]);
   });
 

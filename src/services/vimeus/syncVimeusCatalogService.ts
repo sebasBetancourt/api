@@ -140,7 +140,8 @@ export function createVimeusSync({ client, titles = titleSyncRepository, runs: r
         let items = fetched.get(kind)!;
         if (kind === "series") {
           const before = items.length;
-          items = items.filter((i) => !animeIds.has(i.tmdbId));
+          const storedAnime = await titles.findAnimeTmdbIds(items.map((i) => i.tmdbId));
+          items = items.filter((i) => !animeIds.has(i.tmdbId) && !storedAnime.has(i.tmdbId));
           s.skipped += before - items.length;
         }
         if (legacyIndex && items.length) {
