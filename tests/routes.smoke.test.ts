@@ -23,6 +23,12 @@ describe("seguridad de rutas", () => {
     const res = await app.inject({ method: method as "GET", url });
     expect(res.statusCode).toBe(401);
   });
+  it.each([
+    "/api/v1/categories/summary?type=documental",
+    "/api/v1/titles/list?sort=aleatorio",
+  ])("GET %s con query inválida da 400", async (url) => {
+    expect((await app.inject(url)).statusCode).toBe(400);
+  });
   it("login con body inválido da 400", async () => {
     const res = await app.inject({ method: "POST", url: "/api/v1/auth/login", payload: { email: "x" } });
     expect(res.statusCode).toBe(400);

@@ -38,6 +38,8 @@ export function toTitleDto(t: any): TitleDto {
   };
 }
 
+export type TitleSort = "popular" | "rating" | "recent";
+
 export interface TitleFilters {
   skip: number;
   limit: number;
@@ -45,6 +47,7 @@ export interface TitleFilters {
   categoryId?: string;
   search?: string;
   status?: TitleStatus;
+  sort?: TitleSort;
 }
 
 function buildMatch(f: TitleFilters) {
@@ -56,8 +59,22 @@ function buildMatch(f: TitleFilters) {
   };
 }
 
-/** Orden natural (más antiguos primero), igual que el backend anterior: los títulos curados salen antes que los importados. */
-const listSort = { _id: 1 } as const;
+/**
+ * Sin `sort`: orden natural (más antiguos primero), igual que el backend anterior: los títulos curados salen
+ * antes que los importados. Todos acaban en `_id` para que paginar con skip no repita ni salte títulos.
+ */
+export function listSort(sort?: TitleSort): Record<string, 1 | -1> {
+  switch (sort) {
+    case "popular":
+      return { likes: -1, ratingCount: -1, ratingAvg: -1, _id: 1 };
+    case "rating":
+      return { ratingAvg: -1, ratingCount: -1, _id: 1 };
+    case "recent":
+      return { createdAt: -1, _id: -1 };
+    default:
+      return { _id: 1 };
+  }
+}
 
 async function findByIds(ids: string[]): Promise<TitleDto[]> {
   if (ids.length === 0) return [];
@@ -99,7 +116,7 @@ export const titleRepository = {
 
   async findAll(f: TitleFilters) {
     const rows = await TitleModel.aggregate([
-      { $match: buildMatch(f) }, { $sort: listSort }, { $skip: f.skip }, { $limit: f.limit }, ...lookups,
+      { $match: buildMatch(f) }, { $sort: listSort(f.sort) }, { $skip: f.skip }, { $limit: f.limit }, ...lookups,
     ]);
     return rows.map(toTitleDto);
   },
@@ -119,7 +136,7 @@ export const titleRepository = {
     const ids = [...new Set([...(user?.lists ?? []), ...(user?.favorites ?? [])].map(String))];
     if (ids.length === 0) return [];
     const match = { _id: { $in: oids(ids) }, ...(type && { type }) };
-    const rows = await TitleModel.aggregate([{ $match: match }, { $sort: listSort }, { $skip: skip }, { $limit: limit }, ...lookups]);
+    const rows = await TitleModel.aggregate([{ $match: match }, { $sort: listSort() }, { $skip: skip }, { $limit: limit }, ...lookups]);
     return rows.map(toTitleDto);
   },
 

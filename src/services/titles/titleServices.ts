@@ -8,7 +8,7 @@ export const listTitlesService = (q: ListTitlesQuery) =>
   titleRepository.findAll({
     skip: q.skip, limit: q.limit, type: q.type,
     categoryId: q.categoryId ?? q.categoriesId, search: q.search || undefined,
-    status: "approved",
+    status: "approved", sort: q.sort,
   });
 
 export const listCollectionService = (

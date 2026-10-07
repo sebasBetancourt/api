@@ -75,6 +75,7 @@ const specs: CollectionSpec[] = [
     indexes: [
       { key: { title: "text", description: "text" }, options: { name: "TextIndex" } },
       { key: { type: 1, status: 1, createdAt: -1 } },
+      { key: { categoriesIds: 1, status: 1, type: 1 } }, // explorar por categoría y /categories/summary
       { key: { tmdb_id: 1 }, options: { unique: true, sparse: true } },
       { key: { imdb_id: 1 }, options: { unique: true, sparse: true } },
     ],

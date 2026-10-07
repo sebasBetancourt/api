@@ -151,6 +151,44 @@ describe.skipIf(!run)("flujo completo contra MongoDB", { timeout: 30_000 }, () =
     expect((await call("GET", "/admin/metrics", adminToken)).json().users).toBe(1);
   });
 
+  it("explorar: resumen por categoría, orden por valoración y paginación estable", async () => {
+    const { TitleModel } = await import("../src/models/title.model.js");
+    const cat = (await call("POST", "/categories/create", adminToken, { name: `${tag}-explorar` })).json().category.id;
+    const empty = (await call("POST", "/categories/create", adminToken, { name: `${tag}-vacia` })).json().category.id;
+    const ratings = [2, 5, 3.5];
+    const ids: string[] = [];
+    for (const [i, ratingAvg] of ratings.entries()) {
+      const r = await call("POST", "/titles/create", adminToken, {
+        title: `${tag}-explora-${i}`, description: "d", type: "movie", year: 2020, author: "a",
+        categoriesIds: [cat], posterUrl: `https://img.test/${i}.jpg`,
+      });
+      ids.push(r.json().id);
+      await call("PATCH", `/titles/${ids[i]}/approve`, adminToken);
+      await TitleModel.updateOne({ _id: ids[i] }, { $set: { ratingAvg, ratingCount: 1 } });
+    }
+    const pending = await call("POST", "/titles/create", adminToken, {
+      title: `${tag}-explora-pendiente`, description: "d", type: "movie", year: 2020, author: "a", categoriesIds: [cat],
+    });
+    expect(pending.statusCode).toBe(201); // pendiente: no cuenta
+
+    const movies = (await call("GET", "/categories/summary?type=movie")).json();
+    expect(movies.find((c: { id: string }) => c.id === cat)).toEqual({
+      id: cat, name: `${tag}-explorar`, count: 3, posterUrl: "https://img.test/1.jpg",
+    });
+    expect(movies.some((c: { id: string }) => c.id === empty)).toBe(false);
+    expect((await call("GET", "/categories/summary?type=anime")).json().some((c: { id: string }) => c.id === cat)).toBe(false);
+    expect((await call("GET", "/categories/summary")).json().some((c: { id: string }) => c.id === cat)).toBe(true);
+
+    const byRating = (await call("GET", `/titles/list?categoryId=${cat}&sort=rating`)).json();
+    expect(byRating.map((t: { ratingAvg: number }) => t.ratingAvg)).toEqual([5, 3.5, 2]);
+    const pages = [];
+    for (const skip of [0, 2]) {
+      pages.push(...(await call("GET", `/titles/list?categoryId=${cat}&sort=popular&limit=2&skip=${skip}`)).json());
+    }
+    expect(new Set(pages.map((t: { id: string }) => t.id))).toEqual(new Set(ids));
+    expect(pages).toHaveLength(3);
+  });
+
   it("recuperación de contraseña: un solo enlace vivo, de un solo uso, y solo el hash en la BD", async () => {
     const { env } = await import("../src/libs/env.js");
     const { hashToken } = await import("../src/libs/tokens.js");
