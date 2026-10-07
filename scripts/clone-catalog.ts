@@ -5,7 +5,6 @@
  *   pnpm clone:catalog --to <nombre>   -> a otra BD (nunca DB_NAME)
  * Borra las colecciones `categories` y `titles` de la BD destino antes de copiar.
  */
-import mongoose from "mongoose";
 import { env } from "../src/libs/env.js";
 import { connectMongo, disconnectMongo } from "../src/libs/mongo.js";
 import { setupCollections } from "../src/libs/mongoSetup.js";
@@ -19,7 +18,7 @@ if (!target || target === env.DB_NAME) {
 
 const conn = await connectMongo();
 const source = conn.db!;
-const dest = mongoose.connection.client.db(target);
+const dest = conn.getClient().db(target);
 await setupCollections(dest);
 
 for (const name of ["categories", "titles"]) {

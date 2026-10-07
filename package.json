@@ -11,7 +11,9 @@
     "test": "vitest run",
     "db:setup": "tsx scripts/db-setup.ts",
     "seed": "tsx scripts/seed.ts",
-    "clone:catalog": "tsx scripts/clone-catalog.ts"
+    "clone:catalog": "tsx scripts/clone-catalog.ts",
+    "categories:normalize": "tsx scripts/normalize-categories.ts",
+    "categories:backfill": "tsx scripts/backfill-categories-from-tmdb.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.3.0",

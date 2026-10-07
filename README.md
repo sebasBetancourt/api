@@ -18,6 +18,11 @@ Funciona igual en local y desplegado: solo depende de `MONGODB_URI` (tu cluster 
 | `RUN_DB_TESTS=1 pnpm test` | integración contra Mongo en la BD **separada** `DB_NAME_TEST` (se crea con validadores y se borra al terminar) |
 | `pnpm db:setup [--db nombre]` | crea colecciones, índices y validadores en una BD nueva; se niega a tocar `DB_NAME` sin `--allow-prod` |
 | `pnpm seed` | categorías base y, si defines `SEED_ADMIN_*`, un admin (solo agrega, no borra) |
+| `pnpm clone:catalog [--to nombre]` | copia categorías y títulos de `DB_NAME` a `DB_NAME_TEST` (o a otra BD, nunca a `DB_NAME`) |
+| `pnpm categories:normalize [--db nombre] [--apply]` | corrige tildes y mayúsculas de los nombres de categoría; sin `--apply` solo informa |
+| `pnpm categories:backfill [--db nombre] [--limit N] [--apply]` | asigna categorías a los títulos sin ninguna según sus géneros en TMDB (`TMDB_API_KEY`); sin `--apply` solo informa y guarda las respuestas en `scripts/.cache/` para retomar |
+
+Los scripts de datos trabajan por defecto sobre `DB_NAME_TEST`; escribir en `DB_NAME` exige `--db <DB_NAME> --apply --allow-prod`.
 
 ## Estructura
 ```
@@ -25,7 +30,7 @@ src/
   routes/ controllers/ services/<feature>/ repositories/   capas
   models/        schemas Mongoose sobre las colecciones existentes (campos legacy: embed_url, temps, eps...)
   schemas/       validación zod · interfaces/ DTOs · middlewares/ · libs/ · utils/
-scripts/         db-setup, seed
+scripts/         db-setup, seed, clone-catalog, normalize-categories, backfill-categories-from-tmdb
 legacy/          backend Express anterior (referencia)
 ```
 
