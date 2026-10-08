@@ -14,7 +14,6 @@ export const registerBody = z.object({
   name: z.string().min(1),
   phone: z.string().nullish().transform((v) => v || undefined),
   country: z.string().nullish().transform((v) => v || undefined),
-  avatarUrl: z.string().nullish().transform((v) => v || undefined),
 });
 
 export const loginBody = z.object({

@@ -8,6 +8,7 @@ import { refreshTitleRating } from "./rating.helper.js";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 const toRecord = (u: any): UserRecord => ({
   id: String(u._id), email: u.email, passwordHash: u.passwordHash, name: u.name, role: u.role, banned: !!u.banned,
+  avatarUrl: u.avatarUrl ?? null,
 });
 
 const toPublic = (u: any): PublicUserDto => ({
@@ -27,13 +28,14 @@ export const userRepository = {
     return u ? toRecord(u) : null;
   },
   async create(data: {
-    email: string; passwordHash: string; name: string; phone?: string; country?: string; avatarUrl?: string;
+    email: string; passwordHash: string; name: string; phone?: string; country?: string;
   }) {
     const doc = await UserModel.create({
       ...data, role: "user", banned: false, lists: [], favorites: [], createdAt: new Date(),
     });
     return toRecord(doc.toObject());
   },
+  countAdmins: () => UserModel.countDocuments({ role: "admin", banned: { $ne: true } }),
   touchLogin: (id: string) => UserModel.updateOne({ _id: oid(id) }, { $set: { lastLoginAt: new Date() } }),
 };
 

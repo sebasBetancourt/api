@@ -313,4 +313,105 @@ describe.skipIf(!run)("flujo completo contra MongoDB", { timeout: 30_000 }, () =
       vi.unstubAllGlobals();
     }
   });
+
+  it("perfil: foto procesada y servida con caché/CORP, URL anti-SSRF, contraseña con límite y borrado de cuenta", async () => {
+    const sharp = (await import("sharp")).default;
+    const email = `${tag}-perfil@test.dev`;
+    expect((await call("POST", "/auth/register", undefined, { email, password: "secret123", name: "Perfil" })).statusCode).toBe(201);
+    const login = (await call("POST", "/auth/login", undefined, { email, password: "secret123" })).json();
+    const token = login.token as string;
+    const uid = login.user.id as string;
+    expect(login.user.avatarUrl).toBeNull();
+
+    const upload = (file: Buffer, filename = "foto.png", type = "image/png", auth = token) => {
+      const boundary = "----e2e" + Date.now();
+      const body = Buffer.concat([
+        Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${filename}"\r\nContent-Type: ${type}\r\n\r\n`),
+        file,
+        Buffer.from(`\r\n--${boundary}--\r\n`),
+      ]);
+      return app.inject({
+        method: "PUT", url: "/api/v1/me/avatar", payload: body,
+        headers: { authorization: `Bearer ${auth}`, "content-type": `multipart/form-data; boundary=${boundary}` },
+      });
+    };
+
+    // JPEG con EXIF: se acepta, se recorta a 256x256 WebP y se limpian los metadatos
+    const jpeg = await sharp({ create: { width: 400, height: 200, channels: 3, background: "#e50914" } })
+      .withExif({ IFD0: { Copyright: "secreto" } }).jpeg().toBuffer();
+    const ok = await upload(jpeg, "foto.jpg", "image/jpeg");
+    expect(ok.statusCode).toBe(200);
+    const avatarUrl = ok.json().avatarUrl as string;
+    expect(avatarUrl).toMatch(new RegExp(`^/api/v1/avatars/${uid}\\?v=[0-9a-f]{16}$`));
+    expect((await call("GET", "/me", token)).json().avatarUrl).toBe(avatarUrl);
+
+    const img = await app.inject({ method: "GET", url: avatarUrl });
+    expect(img.statusCode).toBe(200);
+    expect(img.headers["content-type"]).toBe("image/webp");
+    expect(img.headers["cross-origin-resource-policy"]).toBe("cross-origin");
+    expect(img.headers["cache-control"]).toContain("immutable");
+    expect(img.headers["x-content-type-options"]).toBe("nosniff");
+    const meta = await sharp(img.rawPayload).metadata();
+    expect(meta).toMatchObject({ format: "webp", width: 256, height: 256 });
+    expect(meta.exif).toBeUndefined();
+    const cond = await app.inject({ method: "GET", url: avatarUrl, headers: { "if-none-match": img.headers.etag as string } });
+    expect(cond.statusCode).toBe(304);
+
+    // verify y login devuelven nombre y foto para la sesión
+    expect((await call("GET", "/auth/verify", token)).json()).toMatchObject({ valid: true, user: { name: "Perfil", avatarUrl } });
+    const again = (await call("POST", "/auth/login", undefined, { email, password: "secret123" })).json();
+    expect(again.user.avatarUrl).toBe(avatarUrl);
+
+    // el archivo se valida por contenido, no por nombre ni Content-Type
+    expect((await upload(Buffer.from("<svg xmlns='http://www.w3.org/2000/svg'><script>alert(1)</script></svg>"), "a.png")).statusCode).toBe(400);
+    expect((await upload(Buffer.from("GIF89a" + "x".repeat(50)), "a.png")).statusCode).toBe(400);
+    expect((await upload(Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from("basura")]))).statusCode).toBe(400);
+    expect((await upload(Buffer.alloc(2 * 1024 * 1024 + 10, 1))).statusCode).toBe(413);
+    expect((await app.inject({ method: "PUT", url: "/api/v1/me/avatar" })).statusCode).toBe(401);
+
+    // URL: nunca se contactan direcciones internas
+    for (const url of ["http://example.com/a.png", "https://127.0.0.1/a.png", "https://169.254.169.254/latest/meta-data", "https://[::1]/a.png", "https://localhost/a.png", "https://example.com:8443/a.png"]) {
+      expect((await call("PUT", "/me/avatar/url", token, { url })).statusCode).toBe(400);
+    }
+
+    // el nombre se actualiza sin tocar la foto; el teléfono se valida
+    expect((await call("PATCH", "/me", token, { name: "Perfil Nuevo", phone: "+57 300 123 4567" })).statusCode).toBe(200);
+    expect((await call("PATCH", "/me", token, { phone: "abc" })).statusCode).toBe(400);
+    expect((await call("GET", "/me", token)).json()).toMatchObject({ name: "Perfil Nuevo", avatarUrl });
+    expect((await call("PATCH", "/me", token, { name: "Perfil Nuevo", avatarUrl: "https://evil.test/x.png" })).json().avatarUrl).toBe(avatarUrl); // se ignora
+
+    // quitar la foto
+    expect((await call("DELETE", "/me/avatar", token)).json()).toEqual({ avatarUrl: null });
+    expect((await app.inject({ method: "GET", url: avatarUrl })).statusCode).toBe(404);
+    expect((await call("GET", "/me", token)).json().avatarUrl).toBeNull();
+
+    // contraseña: igual a la actual, límite por usuario y cambio correcto
+    expect((await call("PATCH", "/me/password", token, { currentPassword: "secret123", newPassword: "secret123" })).statusCode).toBe(400);
+    expect((await call("PATCH", "/me/password", token, { currentPassword: "secret123", newPassword: "nueva-clave-1" })).statusCode).toBe(200);
+    expect((await call("POST", "/auth/login", undefined, { email, password: "secret123" })).statusCode).toBe(401);
+    expect((await call("POST", "/auth/login", undefined, { email, password: "nueva-clave-1" })).statusCode).toBe(200);
+    let last = 0;
+    for (let i = 0; i < 5; i++) last = (await call("PATCH", "/me/password", token, { currentPassword: "mala", newPassword: "otra-clave-9" })).statusCode;
+    expect(last).toBe(429);
+
+    // borrar cuenta: elimina también la foto; el único admin no puede borrarse
+    await upload(jpeg, "foto.jpg", "image/jpeg");
+    const { AvatarModel } = await import("../src/models/avatar.model.js");
+    expect(await AvatarModel.countDocuments({ userId: uid })).toBe(1);
+    expect((await call("DELETE", "/me", token, { password: "mala" })).statusCode).toBe(401);
+    expect((await call("DELETE", "/me", token, { password: "nueva-clave-1" })).statusCode).toBe(200);
+    expect(await AvatarModel.countDocuments({ userId: uid })).toBe(0);
+    expect((await call("POST", "/auth/login", undefined, { email, password: "nueva-clave-1" })).statusCode).toBe(401);
+  });
+
+  it("borrar cuenta: el único administrador activo no puede eliminarse", async () => {
+    const email = `${tag}-soloadmin@test.dev`;
+    await call("POST", "/auth/register", undefined, { email, password: "secret123", name: "Solo Admin" });
+    const token = (await call("POST", "/auth/login", undefined, { email, password: "secret123" })).json().token as string;
+    await UserModel.updateMany({ role: "admin" }, { $set: { banned: true } }); // nadie más puede administrar
+    await UserModel.updateOne({ email }, { $set: { role: "admin", banned: false } });
+    expect((await call("DELETE", "/me", token, { password: "secret123" })).statusCode).toBe(409);
+    await UserModel.updateOne({ email: adminEmail }, { $set: { banned: false } }); // ahora hay otro admin activo
+    expect((await call("DELETE", "/me", token, { password: "secret123" })).statusCode).toBe(200);
+  });
 });
