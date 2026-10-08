@@ -8,6 +8,7 @@ export interface UserRecord {
   name: string;
   role: RoleName;
   banned: boolean;
+  avatarUrl: string | null;
 }
 
 export interface PublicUserDto {

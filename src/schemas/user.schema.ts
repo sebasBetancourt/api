@@ -1,12 +1,14 @@
 import { z } from "zod";
 import { passwordSchema } from "./auth.schema.js";
 
+/** Teléfono internacional "laxo": dígitos con +, espacios, guiones o paréntesis. */
+export const phoneSchema = z.string().trim().regex(/^\+?[0-9 ()\-]{6,20}$/, "Teléfono no válido");
+
 export const updateMeBody = z
   .object({
     name: z.string().trim().min(1).max(100).optional(),
-    phone: z.string().max(30).nullable().optional(),
-    country: z.string().max(60).nullable().optional(),
-    avatarUrl: z.string().url().nullable().optional(),
+    phone: phoneSchema.nullable().optional(),
+    country: z.string().trim().min(1).max(60).nullable().optional(),
   })
   .refine((v) => Object.keys(v).length > 0, "Nada que actualizar");
 
@@ -21,6 +23,8 @@ export const changePasswordBody = z.object({
   currentPassword: z.string().min(1),
   newPassword: passwordSchema,
 });
+
+export const avatarUrlBody = z.object({ url: z.string().trim().min(1).max(2048) });
 
 export const deleteAccountBody = z.object({ password: z.string().min(1) });
 

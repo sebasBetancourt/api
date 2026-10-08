@@ -30,7 +30,12 @@ export const authController = {
 
   async verify(req: FastifyRequest) {
     const user = await userRepository.findById(req.user.id);
-    return { valid: !!user && !user.banned, user: req.user };
+    const valid = !!user && !user.banned;
+    // El usuario sale de la BD (no del token) para que nombre y foto estén al día.
+    return {
+      valid,
+      user: valid ? { id: user.id, email: user.email, name: user.name, role: user.role, avatarUrl: user.avatarUrl } : null,
+    };
   },
 
   async forgotPassword(req: FastifyRequest<{ Body: ForgotPasswordInput }>) {

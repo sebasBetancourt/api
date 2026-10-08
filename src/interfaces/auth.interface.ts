@@ -11,4 +11,5 @@ export interface PublicUser {
   email: string;
   role: RoleName;
   name: string;
+  avatarUrl: string | null;
 }

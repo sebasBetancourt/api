@@ -12,5 +12,5 @@ export async function loginService(input: LoginInput): Promise<PublicUser> {
   }
   if (user.banned) throw new AppError(403, "Usuario bloqueado");
   await userRepository.touchLogin(user.id);
-  return { id: user.id, email: user.email, role: user.role, name: user.name };
+  return { id: user.id, email: user.email, role: user.role, name: user.name, avatarUrl: user.avatarUrl };
 }

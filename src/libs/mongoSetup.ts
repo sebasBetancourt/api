@@ -186,6 +186,15 @@ const specs: CollectionSpec[] = [
     },
     indexes: [],
   },
+  {
+    name: "avatars",
+    schema: {
+      bsonType: "object",
+      required: ["userId", "data", "etag", "updatedAt"],
+      properties: { userId: objectId, contentType: { bsonType: "string" }, data: { bsonType: "binData" }, etag: { bsonType: "string" }, updatedAt: date },
+    },
+    indexes: [{ key: { userId: 1 }, options: { unique: true } }],
+  },
 ];
 
 export async function setupCollections(db: Db) {

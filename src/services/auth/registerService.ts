@@ -17,5 +17,5 @@ export async function registerService(input: RegisterInput) {
       // carrera entre dos registros simultáneos: lo frena el índice único de email
       throw isDuplicateKey(e) ? new AppError(409, "El usuario ya existe") : e;
     });
-  return { id: user.id, email: user.email, role: user.role, name: user.name };
+  return { id: user.id, email: user.email, role: user.role, name: user.name, avatarUrl: user.avatarUrl };
 }

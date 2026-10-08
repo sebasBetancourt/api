@@ -3,6 +3,7 @@ import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import sensible from "@fastify/sensible";
 import jwt from "@fastify/jwt";
+import multipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
@@ -16,6 +17,8 @@ import { env } from "./libs/env.js";
 import { ConsoleResetLinkSender, type ResetLinkSender } from "./libs/resetLinkSender.js";
 import { errorHandler } from "./middlewares/errorHandler.js";
 import { vimeusScheduler } from "./plugins/vimeusScheduler.js";
+import { avatarsRoutes } from "./routes/avatars.routes.js";
+import { MAX_AVATAR_BYTES } from "./libs/imageProcessor.js";
 import { adminRoutes } from "./routes/admin.routes.js";
 import { favoritesRoutes } from "./routes/favorites.routes.js";
 import { meRoutes } from "./routes/me.routes.js";
@@ -41,6 +44,7 @@ export async function buildApp(opts: BuildAppOptions = {}) {
   await app.register(sensible);
   await app.register(cors, { origin: env.FRONTEND_URL.split(","), credentials: true, methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"] });
   await app.register(rateLimit, { max: 900, timeWindow: "2 minutes" });
+  await app.register(multipart, { limits: { fileSize: MAX_AVATAR_BYTES, files: 1, fields: 0, parts: 2 } });
   await app.register(jwt, { secret: env.JWT_SECRET, sign: { expiresIn: env.JWT_EXPIRES_IN } });
   await app.register(swagger, {
     openapi: { info: { title: "Pelixflix API", version: "2.0.0" } },
@@ -55,6 +59,7 @@ export async function buildApp(opts: BuildAppOptions = {}) {
   await app.register(categoriesRoutes, { prefix: `${API_PREFIX}/categories` });
   await app.register(reviewsRoutes, { prefix: `${API_PREFIX}/reviews` });
   await app.register(meRoutes, { prefix: `${API_PREFIX}/me` });
+  await app.register(avatarsRoutes, { prefix: `${API_PREFIX}/avatars` });
   await app.register(favoritesRoutes, { prefix: `${API_PREFIX}/favorites` });
   await app.register(adminRoutes, { prefix: `${API_PREFIX}/admin` });
   if (opts.scheduleVimeusSync ?? env.VIMEUS_SYNC_ENABLED) await app.register(vimeusScheduler);
